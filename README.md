@@ -5,7 +5,6 @@ AI-based application for converting voice notes into text and generating summari
 ## Frontend
 
 - React.js
-- Vite
 - JavaScript
 
 ## Features
