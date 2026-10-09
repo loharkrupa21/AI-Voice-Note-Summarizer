@@ -1,4 +1,6 @@
+
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base
@@ -6,47 +8,35 @@ from sqlalchemy.orm import declarative_base
 # Load environment variables
 load_dotenv()
 
-# =========================================================
-# DATABASE URL
-# =========================================================
+# Database URL must be set in Render environment variables
+database_url = os.getenv("DATABASE_URL")
 
-database_url = os.getenv(
-    "DATABASE_URL",
-    "mysql+pymysql://root:12345@localhost:3306/ai_voice_note_summarizer"
-)
+if not database_url:
+    raise ValueError(
+        "DATABASE_URL is missing. Set it in the environment variables."
+    )
 
-# =========================================================
-# ENGINE
-# =========================================================
+# SSL certificate located in the backend folder
+ca_file = Path(__file__).resolve().parent / "ca.pem"
 
+# Database engine
 engine = create_engine(
     database_url,
+    connect_args={
+        "ssl": {
+            "ca": str(ca_file)
+        }
+    },
     pool_pre_ping=True
 )
 
-# =========================================================
-# BASE
-# =========================================================
-
+# Base model
 Base = declarative_base()
 
-
-# =========================================================
-# DATABASE CONNECTION TEST
-# =========================================================
-
+# Database connection test
 try:
-
     with engine.connect() as connection:
-
-        print(
-            "Database connection established successfully."
-        )
-
+        print("Database connection established successfully.")
 except Exception as e:
-
-    print(
-        "Database connection failed."
-    )
-
+    print("Database connection failed.")
     print(e)

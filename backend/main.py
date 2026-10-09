@@ -118,251 +118,27 @@ print("======================================")
 print("")
 
 
-# =========================================================
-# LOAD WHISPER MODEL
-# =========================================================
-
-print("Loading Whisper model...")
-
-try:
-
-    whisper_model = whisper.load_model(
-        "base"
-    )
-
-    print(
-        "Whisper model loaded successfully."
-    )
-
-except Exception as e:
-
-    print(
-        "Whisper model loading failed:"
-    )
-
-    print(e)
-
-    whisper_model = None
-
 
 # =========================================================
-# PYDANTIC MODELS
+# LOAD WHISPER MODEL LAZILY
 # =========================================================
 
-class SignupRequest(BaseModel):
+whisper_model = None
 
-    name: str
-    email: str
-    password: str
+def get_whisper_model():
+    global whisper_model
 
+    if whisper_model is None:
+        print("Loading Whisper model...")
 
-class LoginRequest(BaseModel):
-
-    email: str
-    password: str
-
-
-class TranscriptionRequest(BaseModel):
-
-    note_id: int
-    language: str = "English"
-
-
-class SummarizationRequest(BaseModel):
-
-    note_id: int
-    transcript_text: str
-    language: str = "English"
-    format: str = "standard"
-    detail_level: str = "balanced"
-
-
-# =========================================================
-# LANGUAGE MAP
-# =========================================================
-
-LANGUAGE_MAP = {
-
-    "English": "en",
-
-    "Marathi": "mr",
-
-    "Hindi": "hi",
-
-    "Gujarati": "gu",
-
-    "Bengali": "bn",
-
-    "Tamil": "ta",
-
-    "Telugu": "te",
-
-    "Kannada": "kn",
-
-    "Malayalam": "ml",
-
-    "Punjabi": "pa",
-
-    "Urdu": "ur",
-
-    "Nepali": "ne",
-
-    "French": "fr",
-
-    "German": "de",
-
-    "Spanish": "es",
-
-    "Italian": "it",
-
-    "Portuguese": "pt",
-
-    "Japanese": "ja",
-
-    "Korean": "ko",
-
-    "Chinese": "zh"
-}
-
-
-# =========================================================
-# HOME
-# =========================================================
-
-@app.get("/")
-def home():
-
-    return {
-
-        "message":
-            "AI Voice Note Summarizer Backend is Running",
-
-        "whisper":
-            whisper_model is not None,
-
-        "gemini":
-            True
-    }
-
-
-# =========================================================
-# SIGNUP
-# =========================================================
-
-@app.post("/signup")
-def signup(
-    request: SignupRequest
-):
-
-    try:
-
-        # -------------------------------------------------
-        # CHECK EXISTING USER
-        # -------------------------------------------------
-
-        with engine.connect() as conn:
-
-            existing_user = conn.execute(
-                text("""
-                    SELECT id
-                    FROM users
-                    WHERE email = :email
-                """),
-                {
-                    "email": request.email
-                }
-            ).fetchone()
-
-
-        if existing_user:
-
-            raise HTTPException(
-                status_code=400,
-                detail="Email already registered"
-            )
-
-
-        # -------------------------------------------------
-        # HASH PASSWORD
-        # -------------------------------------------------
-
-        hashed_password = bcrypt.hashpw(
-            request.password.encode("utf-8"),
-            bcrypt.gensalt()
-        ).decode("utf-8")
-
-
-        # -------------------------------------------------
-        # INSERT USER
-        # -------------------------------------------------
-
-        with engine.begin() as conn:
-
-            result = conn.execute(
-                text("""
-                    INSERT INTO users
-                    (
-                        name,
-                        email,
-                        password
-                    )
-                    VALUES
-                    (
-                        :name,
-                        :email,
-                        :password
-                    )
-                """),
-                {
-                    "name": request.name,
-                    "email": request.email,
-                    "password": hashed_password
-                }
-            )
-
-            user_id = result.lastrowid
-
-
-        return {
-
-            "message":
-                "Signup successful",
-
-            "user_id":
-                user_id,
-
-            "user": {
-
-                "id":
-                    user_id,
-
-                "name":
-                    request.name,
-
-                "email":
-                    request.email
-            }
-        }
-
-
-    except HTTPException:
-
-        raise
-
-
-    except Exception as e:
-
-        print(
-            "Signup error:"
+        whisper_model = whisper.load_model(
+            "tiny",
+            device="cpu"
         )
 
-        print(e)
+        print("Whisper model loaded successfully.")
 
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
-
+    return whisper_model
 
 # =========================================================
 # LOGIN
@@ -937,36 +713,36 @@ def transcription(
             whisper_language
         )
 
+       
         # -------------------------------------------------
         # 9. START WHISPER
         # -------------------------------------------------
 
-        print(
-            "Starting Whisper transcription..."
-        )
+        print("Starting Whisper transcription...")
 
-        if whisper_language:
+        try:
+            model = get_whisper_model()
 
-            result = whisper_model.transcribe(
+            if whisper_language:
+                result = model.transcribe(
+                    file_path,
+                    language=whisper_language,
+                    task="transcribe",
+                    fp16=False
+                )
+            else:
+                result = model.transcribe(
+                    file_path,
+                    task="transcribe",
+                    fp16=False
+                )
 
-                file_path,
+        except Exception as e:
+            print("Whisper transcription failed:", e)
 
-                language=whisper_language,
-
-                task="transcribe",
-
-                fp16=False
-            )
-
-        else:
-
-            result = whisper_model.transcribe(
-
-                file_path,
-
-                task="transcribe",
-
-                fp16=False
+            raise HTTPException(
+                status_code=500,
+                detail="Audio transcription failed. Please try again."
             )
 
         # -------------------------------------------------
