@@ -625,37 +625,46 @@ export default function App() {
         );
 
         // -------------------------------------------------
-        // SEND TO FASTAPI
+        // SEND TO FASTAPI (ONLY IF NOT ALREADY UPLOADED)
         // -------------------------------------------------
 
-        const uploadResult =
-          await api.uploadVoiceNote(
-            audioInfo.audioBlob,
-
-            audioInfo.title ||
-              "Voice Note",
-
-            userId,
-
-            voiceType
-          );
-
-        console.log(
-          "BACKEND UPLOAD RESPONSE:",
-          uploadResult
-        );
-
-        // -------------------------------------------------
-        // NOTE ID
-        // -------------------------------------------------
-
-        const noteId =
-          uploadResult?.note_id;
+        let noteId = audioInfo?.noteId;
 
         if (!noteId) {
+          console.log(
+            "Audio not yet uploaded. Uploading via handleAudioReady..."
+          );
 
-          throw new Error(
-            "Backend did not return note ID."
+          const uploadResult =
+            await api.uploadVoiceNote(
+              audioInfo.audioBlob,
+
+              audioInfo.title ||
+                "Voice Note",
+
+              userId,
+
+              voiceType
+            );
+
+          console.log(
+            "BACKEND UPLOAD RESPONSE:",
+            uploadResult
+          );
+
+          noteId =
+            uploadResult?.note_id;
+
+          if (!noteId) {
+            throw new Error(
+              "Backend did not return note ID."
+            );
+          }
+        } else {
+          console.log(
+            "Audio already uploaded with note_id:",
+            noteId,
+            "- skipping duplicate upload."
           );
         }
 

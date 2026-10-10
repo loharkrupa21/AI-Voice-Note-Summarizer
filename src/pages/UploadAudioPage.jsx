@@ -185,7 +185,8 @@ export default function UploadAudioPage({ onAudioReady, selectedLanguage = "Engl
     const uploadResult = await api.uploadVoiceNote(
       selectedFile,
       selectedFile.name,
-      user.id
+      user.id,
+      "upload"
     );
 
     console.log("Upload result:", uploadResult);

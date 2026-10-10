@@ -9,8 +9,10 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from database import engine
+from models import User
 from api_calling import generate_ai_summary
 
 import os
@@ -22,6 +24,12 @@ import bcrypt
 # =========================================================
 # REQUEST MODELS
 # =========================================================
+
+class SignupRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+
 
 class LoginRequest(BaseModel):
     email: str
@@ -144,6 +152,112 @@ def health():
         raise HTTPException(
             status_code=503,
             detail="API is running, but database connection failed."
+        )
+
+
+# =========================================================
+# SIGNUP / REGISTRATION
+# =========================================================
+
+@app.post("/signup", status_code=201)
+@app.post("/register", status_code=201)
+def signup(request: SignupRequest):
+    name = (request.name or "").strip()
+    email = (request.email or "").strip().lower()
+    password = request.password or ""
+
+    if not name:
+        raise HTTPException(
+            status_code=400,
+            detail="Name is required."
+        )
+
+    if not email or "@" not in email or "." not in email:
+        raise HTTPException(
+            status_code=400,
+            detail="A valid email address is required."
+        )
+
+    if not password or len(password) < 6:
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 6 characters long."
+        )
+
+    try:
+        with engine.connect() as conn:
+            existing_user = conn.execute(
+                text("""
+                    SELECT id
+                    FROM users
+                    WHERE email = :email
+                """),
+                {"email": email}
+            ).fetchone()
+
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail="User with this email already exists."
+            )
+
+        hashed_password = bcrypt.hashpw(
+            password.encode("utf-8"),
+            bcrypt.gensalt()
+        ).decode("utf-8")
+
+        with engine.begin() as conn:
+            result = conn.execute(
+                text("""
+                    INSERT INTO users (name, email, password)
+                    VALUES (:name, :email, :password)
+                """),
+                {
+                    "name": name,
+                    "email": email,
+                    "password": hashed_password
+                }
+            )
+            user_id = result.lastrowid
+
+            if not user_id:
+                new_user = conn.execute(
+                    text("""
+                        SELECT id
+                        FROM users
+                        WHERE email = :email
+                    """),
+                    {"email": email}
+                ).fetchone()
+                if new_user:
+                    user_id = new_user.id
+
+        return {
+            "message": "User registered successfully",
+            "user_id": user_id,
+            "name": name,
+            "email": email,
+            "user": {
+                "id": user_id,
+                "name": name,
+                "email": email
+            }
+        }
+
+    except HTTPException:
+        raise
+
+    except IntegrityError:
+        raise HTTPException(
+            status_code=400,
+            detail="User with this email already exists."
+        )
+
+    except Exception as e:
+        print("Signup error:", e)
+        raise HTTPException(
+            status_code=500,
+            detail="Registration failed because of a server/database error."
         )
 
 

@@ -531,7 +531,8 @@ export default function RecordVoicePage({
         await api.uploadVoiceNote(
           recordedFile,
           "Recorded Voice Note",
-          userId
+          userId,
+          "recorded"
         );
 
       console.log(

@@ -1,4 +1,20 @@
-const API_BASE = "http://127.0.0.1:8000";
+export function normalizeApiBaseUrl(rawUrl) {
+  const url =
+    (typeof rawUrl === "string" ? rawUrl.trim() : "") ||
+    "http://127.0.0.1:8000";
+
+  return url
+    .replace(/\/+$/, "")
+    .replace(/\/api$/i, "");
+}
+
+const configuredBaseUrl =
+  typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL
+    ? import.meta.env.VITE_API_BASE_URL
+    : "";
+
+export const API_BASE = normalizeApiBaseUrl(configuredBaseUrl);
+export const API_BASE_URL = API_BASE;
 
 // =========================================================
 // HEADERS
@@ -583,5 +599,9 @@ export const api = {
         err
       );
     }
+  },
+
+  getBaseUrl() {
+    return API_BASE;
   },
 };
